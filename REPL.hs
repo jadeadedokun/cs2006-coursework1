@@ -13,11 +13,15 @@ initREPLState = REPLState [] []
 -- that name and value added.
 -- If it already exists, remove the old value
 updateVars :: Name -> Int -> [(Name, Int)] -> [(Name, Int)]
-updateVars = undefined
+
+-- Checks if the set of variables contains the specified name and deletes it if it does, otherwise adds in the name and value
+updateVars name value vars = (name, value) : [ (n, v) | (n, v) <- vars, n /= name ]  
+
 
 -- Return a new set of variables with the given name removed
 dropVar :: Name -> [(Name, Int)] -> [(Name, Int)]
-dropVar = undefined
+dropVar name vars = [ (n, v) | (n, v) <- vars, n /= name ]
+
 
 -- Add a command to the command history in the state
 addHistory :: REPLState -> Command -> REPLState
@@ -26,6 +30,7 @@ addHistory = undefined
 process :: REPLState -> Command -> IO ()
 process st (Set var e) 
      = do let st' = undefined
+     
           -- st' should include the variable set to the result of evaluating e
           repl st'
 process st (Eval e) 
