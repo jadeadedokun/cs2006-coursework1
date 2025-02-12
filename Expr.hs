@@ -4,62 +4,84 @@ import Parsing
 
 type Name = String
 
--- At first, 'Expr' contains only addition and values. You will need to 
+-- At first, 'Expr' contains only addition and values. You will need to
 -- add other operations, and variables
-data Expr = Add Expr Expr
-          | Val Int
-  deriving Show
+data Expr
+  = Add Expr Expr
+  | Val Int
+  | Var Name
+  deriving (Show)
 
 -- These are the REPL commands - set a variable name to a value, and evaluate
 -- an expression
-data Command = Set Name Expr
-             | Eval Expr
-  deriving Show
+data Command
+  = Set Name Expr
+  | Eval Expr
+  deriving (Show)
 
-eval :: [(Name, Int)] -> -- Variable name to value mapping
-        Expr -> -- Expression to evaluate
-        Maybe Int -- Result (if no errors such as missing variables)
+eval ::
+  [(Name, Int)] -> -- Variable name to value mapping
+  Expr -> -- Expression to evaluate
+  Maybe Int -- Result (if no errors such as missing variables)
 eval vars (Val x) = Just x -- for values, just give the value directly
-eval vars (Add x y) = Nothing -- return an error (because it's not implemented yet!)
+-- If the searched for name is found, a value is returned or nothing (so that an appropriate error message can be given)
+eval vars (Var name) = lookup name vars
+-- If both expressions are valid, return the sum of them otherwise return nothing (so that an appropriate error message can be given)
+eval vars (Add x y) =
+  case (eval vars x, eval vars y) of
+    (Just a, Just b) -> Just (a + b)
+    _ -> Nothing
 
 digitToInt :: Char -> Int
 digitToInt x = fromEnum x - fromEnum '0'
 
 pCommand :: Parser Command
-pCommand = do t <- letter
-              char '='
-              e <- pExpr
-              return (Set [t] e)
-            ||| do e <- pExpr
-                   return (Eval e)
+pCommand =
+  do
+    t <- letter
+    char '='
+    e <- pExpr
+    return (Set [t] e)
+    ||| do
+      e <- pExpr
+      return (Eval e)
 
 pExpr :: Parser Expr
-pExpr = do t <- pTerm
-           do char '+'
-              e <- pExpr
-              return (Add t e)
-            ||| do char '-'
-                   e <- pExpr
-                   error "Subtraction not yet implemented!" 
-                 ||| return t
+pExpr = do
+  t <- pTerm
+  do
+    char '+'
+    e <- pExpr
+    return (Add t e)
+    ||| do
+      char '-'
+      e <- pExpr
+      error "Subtraction not yet implemented!"
+    ||| return t
 
 pFactor :: Parser Expr
-pFactor = do d <- digit
-             return (Val (digitToInt d))
-           ||| do v <- letter
-                  error "Variables not yet implemented" 
-                ||| do char '('
-                       e <- pExpr
-                       char ')'
-                       return e
+pFactor =
+  do
+    d <- digit
+    return (Val (digitToInt d))
+    ||| do
+      v <- letter
+      error "Variables not yet implemented"
+    ||| do
+      char '('
+      e <- pExpr
+      char ')'
+      return e
 
 pTerm :: Parser Expr
-pTerm = do f <- pFactor
-           do char '*'
-              t <- pTerm
-              error "Multiplication not yet implemented" 
-            ||| do char '/'
-                   t <- pTerm
-                   error "Division not yet implemented" 
-                 ||| return f
-
+pTerm = do
+  f <- pFactor
+  do
+    char '*'
+    t <- pTerm
+    error "Multiplication not yet implemented"
+    ||| do
+      char '/'
+      t <- pTerm
+      error "Division not yet implemented"
+    ||| return f
