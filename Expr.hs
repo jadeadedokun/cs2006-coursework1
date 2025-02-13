@@ -23,13 +23,12 @@ data Command
   deriving (Show)
 
 
--- Helper function to calculate all operations, which returns nothing in an unsucessful calculation, 0 if a number is divided by 0 or a correct result
+-- Helper function to calculate addition, subtraction and multiplication operations
 operationCalc :: [(Name, Int)] -> Expr -> Expr -> (Int -> Int -> Int) -> Maybe Int
-operationCalc vars x y operator = case eval vars x of
-    Just a -> case eval vars y of
-        Just b -> Just (operator a b)
-        Nothing -> Nothing
-    Nothing -> Nothing
+operationCalc vars x y operator = 
+ case (eval vars x, eval vars y) of
+        (Just a, Just b) -> Just (operator a b)
+        _                -> Nothing
 
 eval ::
   [(Name, Int)] -> -- Variable name to value mapping
@@ -42,8 +41,10 @@ eval vars (Var name) = lookup name vars
 eval vars (Add x y) = operationCalc vars x y (+)
 eval vars (Subt x y) = operationCalc vars x y (-)
 eval vars (Mult x y) = operationCalc vars x y (*)
-eval vars (Div x y) = case (eval vars x, eval vars y) of
-  -- Handles the special case of division by 0
+
+-- Handles the special case of division by 0 as well as all other division operations
+eval vars (Div x y) = 
+  case (eval vars x, eval vars y) of
     (Just a, Just 0) -> Just 0
     (Just a, Just b) -> Just (a `div` b)
     _ -> Nothing
@@ -72,7 +73,7 @@ pExpr = do
     ||| do
       char '-'
       e <- pExpr
-      error "Subtraction not yet implemented!"
+      return (Subt t e)
     ||| return t
 
 pFactor :: Parser Expr
@@ -95,9 +96,9 @@ pTerm = do
   do
     char '*'
     t <- pTerm
-    error "Multiplication not yet implemented"
+    return (Mult f t)
     ||| do
       char '/'
       t <- pTerm
-      error "Division not yet implemented"
+      return (Div f t)
     ||| return f

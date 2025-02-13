@@ -69,7 +69,6 @@ repl st = do putStr (show (length (history st)) ++ " > ")
              inp <- getLine
 
             -- Allows for the user to quit the calculator gracefully
-
              if inp == ":q"
               then putStrLn "Bye"
              else case parse pCommand inp of
