@@ -4,8 +4,7 @@ import Parsing
 
 type Name = String
 
--- At first, 'Expr' contains only addition and values. You will need to
--- add other operations, and variables
+-- Expr data type which defines the variables present in different expression calculations
 data Expr
   = Add Expr Expr
   | Mult Expr Expr
@@ -20,6 +19,7 @@ data Expr
 data Command
   = Set Name Expr
   | Eval Expr
+  | Recall Int
   deriving (Show)
 
 
@@ -55,10 +55,14 @@ digitToInt x = fromEnum x - fromEnum '0'
 pCommand :: Parser Command
 pCommand =
   do
-    t <- letter
-    char '='
-    e <- pExpr
-    return (Set [t] e)
+    char '!'
+    n <- many1 digit
+    return (Recall (read n))
+    ||| do
+      t <- letter
+      char '='
+      e <- pExpr
+      return (Set [t] e)
     ||| do
       e <- pExpr
       return (Eval e)
@@ -83,7 +87,7 @@ pFactor =
     return (Val (digitToInt d))
     ||| do
       v <- letter
-      error "Variables not yet implemented"
+      return (Var [v])
     ||| do
       char '('
       e <- pExpr

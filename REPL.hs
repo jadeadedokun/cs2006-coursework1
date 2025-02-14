@@ -4,10 +4,11 @@ import Expr
 import Parsing
 
 data REPLState = REPLState { vars :: [(Name, Int)],
-                             history :: [Command] }
+                             history :: [Command],
+                             commandNo :: Int }
 
 initREPLState :: REPLState
-initREPLState = REPLState [] []
+initREPLState = REPLState [] [] 0
 
 
 -- Function which given a variable name and a value, returns a new set of variables with
@@ -26,7 +27,7 @@ dropVar name vars = [ (n, v) | (n, v) <- vars, n /= name ]
 
 -- Function which adds a command to the command history in the state
 addHistory :: REPLState -> Command -> REPLState
-addHistory st command = st { history = command : history st }
+addHistory st command = st { history = history st ++ [command], commandNo = commandNo st + 1 }
 
 
 -- Helper function which attempts to evaluate the expression and produce a result
@@ -59,6 +60,17 @@ process st (Eval e) = do
   let newState = addHistory st' (Eval e)
   repl newState
 
+  -- Process 'History' command: Recall a command from history
+process st (Recall n) = do
+  let historyLength = length (history st)
+  if n >= 0 && n <= historyLength
+    then do
+      let cmd = history st !! n
+      process st cmd
+    else do
+      putStrLn "The command number you have entered is invalid."
+      return ()
+
 -- Read, Eval, Print Loop
 -- This reads and parses the input using the pCommand parser, and calls
 -- 'process' to process the command.
@@ -67,7 +79,6 @@ process st (Eval e) = do
 repl :: REPLState -> IO ()
 repl st = do putStr (show (length (history st)) ++ " > ")
              inp <- getLine
-
             -- Allows for the user to quit the calculator gracefully
              if inp == ":q"
               then putStrLn "Bye"
