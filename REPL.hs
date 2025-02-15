@@ -78,9 +78,8 @@ process st (Recall n) = do
   let historyLength = length (history st)
   if n >= 0 && n < historyLength
     then do
-      let newState = addHistory st (Recall n)
       let cmd = history st !! n
-      process newState cmd
+      process st cmd
     else do
       putStrLn "The command number you have entered is invalid."
       return ()

@@ -71,6 +71,7 @@ pCommand =
       char '='
       skipExtraChars
       e <- pExpr
+      skipExtraChars
       return (Set t e)
     ||| do
       skipExtraChars
@@ -123,6 +124,7 @@ pTerm = do
     skipExtraChars
     char '*'
     t <- pTerm
+    skipExtraChars
     return (Mult f t)
     ||| do
       skipExtraChars
