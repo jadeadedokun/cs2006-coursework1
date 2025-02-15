@@ -10,6 +10,9 @@ data Expr
   | Mult Expr Expr
   | Div Expr Expr
   | Subt Expr Expr
+  | Abs Expr
+  | Mod Expr Expr
+  | Pow Expr Expr
   | Val Int
   | Var Name
   deriving (Show)
@@ -30,6 +33,13 @@ operationCalc vars x y operator =
         (Just a, Just b) -> Just (operator a b)
         _                -> Nothing
 
+-- Function to calcuate the absolute value of a number (if negative, otherwise returns the same number)
+absCalc :: [(Name, Int)] -> Expr -> Maybe Int
+absCalc vars x = 
+  case eval vars x of
+    Just value -> Just (abs value)
+    _    -> Nothing
+
 eval ::
   [(Name, Int)] -> -- Variable name to value mapping
   Expr -> -- Expression to evaluate
@@ -41,13 +51,15 @@ eval vars (Var name) = lookup name vars
 eval vars (Add x y) = operationCalc vars x y (+)
 eval vars (Subt x y) = operationCalc vars x y (-)
 eval vars (Mult x y) = operationCalc vars x y (*)
-
 -- Handles the special case of division by 0 as well as all other division operations
 eval vars (Div x y) = 
   case (eval vars x, eval vars y) of
     (Just a, Just 0) -> Just 0
     (Just a, Just b) -> Just (a `div` b)
     _ -> Nothing
+eval vars (Mod x y) = operationCalc vars x y mod
+eval vars (Pow x y) = operationCalc vars x y (^)
+eval vars (Abs x) = absCalc vars x
 
 skipExtraChars :: Parser ()
 skipExtraChars = do
@@ -60,24 +72,34 @@ pCommand :: Parser Command
 pCommand =
   do
     skipExtraChars
+    -- Allows for parsing the absolute value of the result of an expression
+    char '|'
+    skipExtraChars
+    e <- pExpr
+    skipExtraChars
+    char '|'
+    skipExtraChars
+    return (Eval (Abs e))
+  ||| do
+    skipExtraChars
     char '!'
     -- Allows for numbers greater than one digit to be entered into the calculator for use
     n <- many1 digit
     return (Recall (read n))
-    ||| do
-      skipExtraChars
-      t <- many1 letter
-      skipExtraChars
-      char '='
-      skipExtraChars
-      e <- pExpr
-      skipExtraChars
-      return (Set t e)
-    ||| do
-      skipExtraChars
-      e <- pExpr
-      skipExtraChars
-      return (Eval e)
+  ||| do
+    skipExtraChars
+    t <- many1 letter
+    skipExtraChars
+    char '='
+    skipExtraChars
+    e <- pExpr
+    skipExtraChars
+    return (Set t e)
+  ||| do
+    skipExtraChars
+    e <- pExpr
+    skipExtraChars
+    return (Eval e)
 
 pExpr :: Parser Expr
 pExpr = do
@@ -100,6 +122,22 @@ pFactor :: Parser Expr
 pFactor =
   do
     skipExtraChars
+    char '|'
+    skipExtraChars
+    e <- pExpr
+    skipExtraChars
+    char '|'
+    skipExtraChars
+    return (Abs e)
+    ||| do   
+    skipExtraChars
+    -- Checks if there is a minus sign before a number in order to identify it as negative
+    char '-'
+    skipExtraChars
+    n <- many1 digit
+    return (Val (-(read n)))
+    ||| do    
+    skipExtraChars
     n <- many1 digit
     return (Val (read n))
     ||| do
@@ -120,7 +158,20 @@ pTerm :: Parser Expr
 pTerm = do
   skipExtraChars
   f <- pFactor
+  -- Allows for the modulus calculation to be performed
   do
+    skipExtraChars
+    char '^'
+    t <- pTerm
+    skipExtraChars
+    return (Pow f t)
+    ||| do
+    skipExtraChars
+    string "mod"
+    t <- pTerm
+    skipExtraChars
+    return (Mod f t)
+    ||| do
     skipExtraChars
     char '*'
     t <- pTerm
