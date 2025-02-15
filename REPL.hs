@@ -8,6 +8,7 @@ data REPLState = REPLState { vars :: [(Name, Int)],
                              commandNo :: Int }
 
 initREPLState :: REPLState
+-- Ensures that the command count begins from 0
 initREPLState = REPLState [] [] 0
 
 
@@ -42,31 +43,44 @@ handleEvalResult Nothing st = do
   putStrLn "There has been an error in this evaluation due to an invalid expression or missing variable."
   return st
 
--- Process 'Set' command: Set the variable, update the state, but no printing of result
+-- Function which processes a set command by setting the variable and updating the state
 process :: REPLState -> Command -> IO ()
-process st (Set var e) = do
-  let eResult = eval (vars st) e
-  let st' = case eResult of
-        Just value -> st { vars = updateVars var value (vars st) }
-        Nothing    -> st
--- Calls the addHistoryFunction to add the expression to history
-  let newState = addHistory st' (Set var e)
-  repl newState
+process st (Set var e)
+-- Ensures that 'it' cannot be overwritten and will only store the result of the most recent calculation
+  | var == "it" = do
+      putStrLn "You cannot assign a value to the implicit variable 'it'."
+      repl st
+  | otherwise = do
+      let eResult = eval (vars st) e
+      st' <- case eResult of
+               Nothing -> do
+                 putStrLn "The variable was not assigned successfully, try again."
+                 return st
+               Just value -> do
+                 putStrLn "OK"
+                 return st { vars = updateVars var value (vars st) }
+      let newState = addHistory st' (Set var e)
+      repl newState
 
--- Process 'Eval' command: Evaluate the expression and print the result or error message
+-- Function to evaluate an expression and print the result or an error message
 process st (Eval e) = do
   let eResult = eval (vars st) e
   st' <- handleEvalResult eResult st
-  let newState = addHistory st' (Eval e)
+  let st'' = case eResult of
+              -- Updates the value of 'it' to store the result of the most recent calculation
+               Just value -> st' { vars = updateVars "it" value (vars st') }
+               Nothing    -> st'
+  let newState = addHistory st'' (Eval e)
   repl newState
 
-  -- Process 'History' command: Recall a command from history
+  -- Function to return the result associated with a specified command number
 process st (Recall n) = do
   let historyLength = length (history st)
-  if n >= 0 && n <= historyLength
+  if n >= 0 && n < historyLength
     then do
+      let newState = addHistory st (Recall n)
       let cmd = history st !! n
-      process st cmd
+      process newState cmd
     else do
       putStrLn "The command number you have entered is invalid."
       return ()
@@ -85,5 +99,5 @@ repl st = do putStr (show (length (history st)) ++ " > ")
              else case parse pCommand inp of
                   [(cmd, "")] -> -- Must parse entire input
                           process st cmd
-                  _ -> do putStrLn "Parse error"
+                  _ -> do putStrLn "There has been a parse error."
                           repl st

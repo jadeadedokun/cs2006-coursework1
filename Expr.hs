@@ -49,60 +49,85 @@ eval vars (Div x y) =
     (Just a, Just b) -> Just (a `div` b)
     _ -> Nothing
 
+skipExtraChars :: Parser ()
+skipExtraChars = do
+  space
+
 digitToInt :: Char -> Int
 digitToInt x = fromEnum x - fromEnum '0'
 
 pCommand :: Parser Command
 pCommand =
   do
+    skipExtraChars
     char '!'
+    -- Allows for numbers greater than one digit to be entered into the calculator for use
     n <- many1 digit
     return (Recall (read n))
     ||| do
-      t <- letter
+      skipExtraChars
+      t <- many1 letter
+      skipExtraChars
       char '='
+      skipExtraChars
       e <- pExpr
-      return (Set [t] e)
+      return (Set t e)
     ||| do
+      skipExtraChars
       e <- pExpr
+      skipExtraChars
       return (Eval e)
 
 pExpr :: Parser Expr
 pExpr = do
   t <- pTerm
   do
+    skipExtraChars
     char '+'
     e <- pExpr
+    skipExtraChars
     return (Add t e)
     ||| do
+      skipExtraChars
       char '-'
       e <- pExpr
+      skipExtraChars
       return (Subt t e)
     ||| return t
 
 pFactor :: Parser Expr
 pFactor =
   do
-    d <- digit
-    return (Val (digitToInt d))
+    skipExtraChars
+    n <- many1 digit
+    return (Val (read n))
     ||| do
-      v <- letter
-      return (Var [v])
+      skipExtraChars
+      -- Allows for calculations to be performed with variables of names longer than one letter
+      v <- many1 letter
+      skipExtraChars
+      return (Var v)
     ||| do
+      skipExtraChars
       char '('
       e <- pExpr
       char ')'
+      skipExtraChars
       return e
 
 pTerm :: Parser Expr
 pTerm = do
+  skipExtraChars
   f <- pFactor
   do
+    skipExtraChars
     char '*'
     t <- pTerm
     return (Mult f t)
     ||| do
+      skipExtraChars
       char '/'
       t <- pTerm
+      skipExtraChars
       return (Div f t)
     ||| return f
