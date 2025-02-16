@@ -82,7 +82,7 @@ process st (Recall n) = do
       process st cmd
     else do
       putStrLn "The command number you have entered is invalid."
-      return ()
+      repl st
 
 -- Read, Eval, Print Loop
 -- This reads and parses the input using the pCommand parser, and calls
