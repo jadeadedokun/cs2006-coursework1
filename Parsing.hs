@@ -151,3 +151,14 @@ integer                       =  token int
 
 symbol                        :: String -> Parser String
 symbol xs                     =  token (string xs)
+
+{-
+New type to handle integers and floats
+----------------
+-}
+
+data numericalVal
+   = Integer Int
+   | Double Double
+   | String String
+   deriving (Show, Eq)

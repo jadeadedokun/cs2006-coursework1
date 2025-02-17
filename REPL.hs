@@ -16,8 +16,6 @@ initREPLState = REPLState [] [] 0
 -- that name and value added.
 -- If it already exists, removes the old value
 updateVars :: Name -> Int -> [(Name, Int)] -> [(Name, Int)]
-
--- Function which checks if the set of variables contains the specified name and deletes it if it does, otherwise adds in the name and value
 updateVars name value vars = (name, value) : dropVar name vars
 
 
