@@ -91,10 +91,11 @@ repl :: REPLState -> IO ()
 repl st = do putStr (show (length (history st)) ++ " > ")
              inp <- getLine
             -- Allows for the user to quit the calculator gracefully
-             if inp == ":q"
-              then putStrLn "Bye"
-             else case parse pCommand inp of
-                  [(cmd, "")] -> -- Must parse entire input
+             case inp of 
+              ":q" -> putStrLn "Bye"
+              _ -> case parse pCommand inp of
+                  [(cmd, "")] -> do -- Must parse entire input
+                          putStrLn inp
                           process st cmd
                   _ -> do putStrLn "There has been a parse error."
                           repl st

@@ -158,29 +158,43 @@ pTerm :: Parser Expr
 pTerm = do
   skipExtraChars
   f <- pFactor
-  -- Allows for the modulus calculation to be performed
   do
     skipExtraChars
     char '^'
     t <- pTerm
     skipExtraChars
     return (Pow f t)
+      -- Allows for the modulus calculation to be performed
     ||| do
     skipExtraChars
     string "mod"
     t <- pTerm
     skipExtraChars
     return (Mod f t)
+      -- Establishes an alternative symbol which is frequently used to signify modulus
+    ||| do
+    skipExtraChars
+    char '%'
+    t <- pTerm
+    skipExtraChars
+    return (Mod f t)    
     ||| do
     skipExtraChars
     char '*'
     t <- pTerm
     skipExtraChars
     return (Mult f t)
+      -- Establishes an alternative symbol which is frequently used to signify multiplication
     ||| do
-      skipExtraChars
-      char '/'
-      t <- pTerm
-      skipExtraChars
-      return (Div f t)
+    skipExtraChars
+    char 'x'
+    t <- pTerm
+    skipExtraChars
+    return (Mult f t)    
+    ||| do
+    skipExtraChars
+    char '/'
+    t <- pTerm
+    skipExtraChars
+    return (Div f t)
     ||| return f
