@@ -61,9 +61,17 @@ eval vars (Mod x y) = operationCalc vars x y mod
 eval vars (Pow x y) = operationCalc vars x y (^)
 eval vars (Abs x) = absCalc vars x
 
+-- Function to skip comments that are added on the command line by consuming them until a new line is reached
+skipComments :: Parser ()
+skipComments = do
+   (char '#' >> many (sat (/= '\n')) >> return ()) ||| return ()
+   (string "--" >> many (sat (/= '\n')) >> return ()) ||| return ()
+
+-- Function that allows for extra characters (comments and spaces) to be skipped
 skipExtraChars :: Parser ()
 skipExtraChars = do
   space
+  skipComments
 
 digitToInt :: Char -> Int
 digitToInt x = fromEnum x - fromEnum '0'
