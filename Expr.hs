@@ -20,11 +20,14 @@ data Expr
   | Abs Expr
   | Mod Expr Expr
   | Pow Expr Expr
-  | Val Value  -- Changed to support Int, Double, and String
+  | Val Value  -- supports Int, Double, and String
   | Var Name
   deriving (Show)
 
 data Value = IntVal Int | DoubleVal Double | StringVal String deriving (Eq)
+
+
+data BST k v = Empty | Node (BST k v) k v (BST k v) deriving (Show)
 
 
 
@@ -34,7 +37,41 @@ data Command
   = Set Name Expr
   | Eval Expr
   | Recall Int
+  | ReadFile FilePath
   deriving (Show)
+
+  -- Insert a key-value pair into the BST
+bstInsert :: Ord k => k -> v -> BST k v -> BST k v
+bstInsert k v Empty = Node Empty k v Empty
+bstInsert k v (Node left k' v' right)
+  | k < k'    = Node (bstInsert k v left) k' v' right
+  | k > k'    = Node left k' v' (bstInsert k v right)
+  | otherwise = Node left k v right  -- Replace existing value
+
+-- Lookup a key in the BST
+bstLookup :: Ord k => k -> BST k v -> Maybe v
+bstLookup _ Empty = Nothing
+bstLookup k (Node left k' v' right)
+  | k < k'    = bstLookup k left
+  | k > k'    = bstLookup k right
+  | otherwise = Just v' 
+
+bstDelete :: Ord k => k -> BST k v -> BST k v
+bstDelete _ Empty = Empty
+bstDelete k (Node left k' v' right)
+  | k < k'    = Node (bstDelete k left) k' v' right
+  | k > k'    = Node left k' v' (bstDelete k right)
+  | otherwise = case (left, right) of
+      (Empty, Empty) -> Empty
+      (Empty, _)     -> right
+      (_, Empty)     -> left
+      _              -> let (minK, minV) = bstMin right
+                        in Node left minK minV (bstDelete minK right)
+  where
+    bstMin (Node Empty k v _) = (k, v)
+    bstMin (Node left _ _ _)  = bstMin left
+
+
 
 -- Helper to extract numerical value (Int or Double)
 getNum :: Value -> Either String Double
@@ -50,7 +87,7 @@ bothNums a b = do
   return (x, y)
 
 -- Helper function to calculate addition, subtraction and multiplication operations
-operationCalc :: [(Name, Value)] -> Expr -> Expr -> (Double -> Double -> Double) -> Either String Value
+operationCalc :: BST Name Value -> Expr -> Expr -> (Double -> Double -> Double) -> Either String Value
 operationCalc vars x y operator = do
   a <- eval vars x
   b <- eval vars y
@@ -58,7 +95,7 @@ operationCalc vars x y operator = do
   return $ DoubleVal (operator a' b')
 
 -- Function to calculate the absolute value of a number
-absCalc :: [(Name, Value)] -> Expr -> Either String Value
+absCalc :: BST Name Value -> Expr -> Either String Value
 absCalc vars x = do
   a <- eval vars x
   case a of
@@ -66,9 +103,9 @@ absCalc vars x = do
     DoubleVal d -> Right $ DoubleVal (abs d)
     _           -> Left "Cannot take absolute value of a string."
 
-eval :: [(Name, Value)] -> Expr -> Either String Value
+eval :: BST Name Value -> Expr -> Either String Value
 eval _ (Val x) = Right x
-eval vars (Var name) = case lookup name vars of
+eval vars (Var name) = case bstLookup name vars of
   Just v  -> Right v
   Nothing -> Left $ "Variable '" ++ name ++ "' not found."
 eval vars (Add x y) = do
@@ -110,16 +147,19 @@ skipExtraChars = do
 -- Parser for commands (supports absolute value, recall, set, and eval)
 pCommand :: Parser Command
 pCommand =
-  do
-    skipExtraChars
-    -- Allows for parsing the absolute value of the result of an expression
-    char '|'
-    skipExtraChars
-    e <- pExpr
-    skipExtraChars
-    char '|'
-    skipExtraChars
-    return (Eval (Abs e))
+  (do skipExtraChars
+      string ":read"
+      skipExtraChars
+      path <- many1 (sat (/= ' '))
+      return (ReadFile path))
+  ||| (do skipExtraChars
+          char '|'
+          skipExtraChars
+          e <- pExpr
+          skipExtraChars
+          char '|'
+          skipExtraChars
+          return (Eval (Abs e)))
   ||| do
     skipExtraChars
     char '!'
