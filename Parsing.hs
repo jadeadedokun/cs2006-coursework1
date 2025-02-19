@@ -5,7 +5,10 @@ Graham Hutton, Cambridge University Press, 2007.
 Minor changes by Edwin Brady
 -}
 
-module Parsing where
+module Parsing (
+  Parser, char, digit, letter, many1, sat, string, 
+  intTok, doubleTok,   stringLit, (|||), many, parse
+) where
 
 import Data.Char
 import Control.Monad
@@ -13,6 +16,12 @@ import Control.Applicative hiding (many)
 
 infixr 5 |||
 
+stringLit :: Parser String
+stringLit = do
+  char '"'                          -- Expect opening quote
+  content <- many (sat (/= '"'))    -- Parse everything until closing quote
+  char '"'                          -- Expect closing quote
+  return content
 {-
 The monad of parsers
 --------------------
@@ -140,6 +149,12 @@ token p                       =  do space
                                     space
                                     return v
 
+intTok :: Parser Int
+intTok = token integer
+
+doubleTok :: Parser Double
+doubleTok = token double
+
 identifier                    :: Parser String
 identifier                    =  token ident
 
@@ -151,6 +166,34 @@ integer                       =  token int
 
 symbol                        :: String -> Parser String
 symbol xs                     =  token (string xs)
+
+double :: Parser Double
+double = do
+  -- Parse optional negative sign
+  sign <- optional (char '-')
+
+  -- Parse whole number part (at least one digit)
+  whole <- many1 digit
+
+  -- Parse optional decimal part
+  decimal <- optional $ do
+    char '.'
+    digits <- many digit  -- Allow empty fractional part (e.g., "3.")
+    return digits
+
+  -- Combine parsed components into a number string
+  let signStr = case sign of
+                  Just '-' -> "-"
+                  _        -> ""
+      decimalStr = case decimal of
+                     Just d -> '.' : d
+                     Nothing -> ""
+      numStr = signStr ++ whole ++ decimalStr
+
+  -- Convert to Double or fail
+  case reads numStr of
+    [(x, "")] -> return x
+    _         -> failure
 
 {-
 New type to handle integers and floats

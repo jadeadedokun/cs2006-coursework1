@@ -1,8 +1,15 @@
 module Expr where
 
-import Parsing
+
+import Parsing (Parser, char, digit, letter, many, many1, sat, string, intTok, doubleTok, stringLit, (|||))
+import Data.Char (isSpace, isDigit)
 
 type Name = String
+
+instance Show Value where
+  show (IntVal x) = show x
+  show (DoubleVal x) = show x
+  show (StringVal s) = s
 
 -- Expr data type which defines the variables present in different expression calculations
 data Expr
@@ -13,9 +20,13 @@ data Expr
   | Abs Expr
   | Mod Expr Expr
   | Pow Expr Expr
-  | Val Int
+  | Val Value  -- Changed to support Int, Double, and String
   | Var Name
   deriving (Show)
+
+data Value = IntVal Int | DoubleVal Double | StringVal String deriving (Eq)
+
+
 
 -- These are the REPL commands - set a variable name to a value, and evaluate
 -- an expression
@@ -25,49 +36,78 @@ data Command
   | Recall Int
   deriving (Show)
 
+-- Helper to extract numerical value (Int or Double)
+getNum :: Value -> Either String Double
+getNum (IntVal x) = Right (fromIntegral x)
+getNum (DoubleVal x) = Right x
+getNum _ = Left "Expected a number."
+
+-- Helper to check if two values are compatible for arithmetic
+bothNums :: Value -> Value -> Either String (Double, Double)
+bothNums a b = do
+  x <- getNum a
+  y <- getNum b
+  return (x, y)
 
 -- Helper function to calculate addition, subtraction and multiplication operations
-operationCalc :: [(Name, Int)] -> Expr -> Expr -> (Int -> Int -> Int) -> Maybe Int
-operationCalc vars x y operator = 
- case (eval vars x, eval vars y) of
-        (Just a, Just b) -> Just (operator a b)
-        _                -> Nothing
+operationCalc :: [(Name, Value)] -> Expr -> Expr -> (Double -> Double -> Double) -> Either String Value
+operationCalc vars x y operator = do
+  a <- eval vars x
+  b <- eval vars y
+  (a', b') <- bothNums a b
+  return $ DoubleVal (operator a' b')
 
--- Function to calcuate the absolute value of a number (if negative, otherwise returns the same number)
-absCalc :: [(Name, Int)] -> Expr -> Maybe Int
-absCalc vars x = 
-  case eval vars x of
-    Just value -> Just (abs value)
-    _    -> Nothing
+-- Function to calculate the absolute value of a number
+absCalc :: [(Name, Value)] -> Expr -> Either String Value
+absCalc vars x = do
+  a <- eval vars x
+  case a of
+    IntVal n    -> Right $ IntVal (abs n)
+    DoubleVal d -> Right $ DoubleVal (abs d)
+    _           -> Left "Cannot take absolute value of a string."
 
-eval ::
-  [(Name, Int)] -> -- Variable name to value mapping
-  Expr -> -- Expression to evaluate
-  Maybe Int -- Result (if no errors such as missing variables)
-eval vars (Val x) = Just x -- for values, just give the value directly
--- If the searched for name is found, a value is returned or nothing (so that an appropriate error message can be given)
-eval vars (Var name) = lookup name vars
--- If both expressions are valid, return the calculation otherwise return nothing (so that an appropriate error message can be given)
-eval vars (Add x y) = operationCalc vars x y (+)
+eval :: [(Name, Value)] -> Expr -> Either String Value
+eval _ (Val x) = Right x
+eval vars (Var name) = case lookup name vars of
+  Just v  -> Right v
+  Nothing -> Left $ "Variable '" ++ name ++ "' not found."
+eval vars (Add x y) = do
+  a <- eval vars x
+  b <- eval vars y
+  case (a, b) of
+    (StringVal s1, StringVal s2) -> Right $ StringVal (s1 ++ s2)  
+    _ -> do
+      (a', b') <- bothNums a b
+      if fromIntegral (round a') == a' && fromIntegral (round b') == b'
+        then Right $ IntVal (round a' + round b')
+        else Right $ DoubleVal (a' + b')
 eval vars (Subt x y) = operationCalc vars x y (-)
 eval vars (Mult x y) = operationCalc vars x y (*)
--- Handles the special case of division by 0 as well as all other division operations
-eval vars (Div x y) = 
-  case (eval vars x, eval vars y) of
-    (Just a, Just 0) -> Just 0
-    (Just a, Just b) -> Just (a `div` b)
-    _ -> Nothing
-eval vars (Mod x y) = operationCalc vars x y mod
-eval vars (Pow x y) = operationCalc vars x y (^)
+eval vars (Div x y) = do
+  aVal <- eval vars x 
+  bVal <- eval vars y  
+  (a, b) <- bothNums aVal bVal  
+  if b == 0 
+    then Left "Division by zero." 
+    else Right $ DoubleVal (a / b)
+eval vars (Mod x y) = do
+  a <- eval vars x
+  b <- eval vars y
+  case (a, b) of
+    (IntVal a', IntVal b') -> 
+      if b' == 0 
+        then Left "Modulus by zero." 
+        else Right $ IntVal (a' `mod` b')
+    _ -> Left "Modulus requires integer operands."
+eval vars (Pow x y) = operationCalc vars x y (**)
 eval vars (Abs x) = absCalc vars x
 
 skipExtraChars :: Parser ()
 skipExtraChars = do
-  space
+  many (sat isSpace)
+  return ()
 
-digitToInt :: Char -> Int
-digitToInt x = fromEnum x - fromEnum '0'
-
+-- Parser for commands (supports absolute value, recall, set, and eval)
 pCommand :: Parser Command
 pCommand =
   do
@@ -94,13 +134,14 @@ pCommand =
     skipExtraChars
     e <- pExpr
     skipExtraChars
-    return (Set t e)
+    return (Set t e)  -- Removed extra ')'
   ||| do
     skipExtraChars
     e <- pExpr
     skipExtraChars
     return (Eval e)
 
+-- Parser for expressions (terms and factors)
 pExpr :: Parser Expr
 pExpr = do
   t <- pTerm
@@ -118,6 +159,7 @@ pExpr = do
       return (Subt t e)
     ||| return t
 
+-- Parser for factors (values, variables, parentheses, etc.)
 pFactor :: Parser Expr
 pFactor =
   do
@@ -129,31 +171,36 @@ pFactor =
     char '|'
     skipExtraChars
     return (Abs e)
-    ||| do   
+  ||| do
     skipExtraChars
-    -- Checks if there is a minus sign before a number in order to identify it as negative
-    char '-'
+    s <- stringLit  -- Parse strings
     skipExtraChars
-    n <- many1 digit
-    return (Val (-(read n)))
-    ||| do    
+    return (Val (StringVal s))
+  ||| do
     skipExtraChars
-    n <- many1 digit
-    return (Val (read n))
-    ||| do
-      skipExtraChars
-      -- Allows for calculations to be performed with variables of names longer than one letter
-      v <- many1 letter
-      skipExtraChars
-      return (Var v)
-    ||| do
-      skipExtraChars
-      char '('
-      e <- pExpr
-      char ')'
-      skipExtraChars
-      return e
+    d <- doubleTok  -- Parse floating-point numbers first
+    skipExtraChars
+    return (Val (DoubleVal d))
+  ||| do
+    skipExtraChars
+    n <- intTok  -- Parse integers after floats
+    skipExtraChars
+    return (Val (IntVal n))
+  ||| do
+    skipExtraChars
+    v <- many1 letter
+    skipExtraChars
+    return (Var v)
+  ||| do
+    skipExtraChars
+    char '('
+    e <- pExpr
+    char ')'
+    skipExtraChars
+    return e
 
+
+-- Parser for terms (multiplication, division, etc.)
 pTerm :: Parser Expr
 pTerm = do
   skipExtraChars
@@ -164,14 +211,12 @@ pTerm = do
     t <- pTerm
     skipExtraChars
     return (Pow f t)
-      -- Allows for the modulus calculation to be performed
     ||| do
     skipExtraChars
     string "mod"
     t <- pTerm
     skipExtraChars
     return (Mod f t)
-      -- Establishes an alternative symbol which is frequently used to signify modulus
     ||| do
     skipExtraChars
     char '%'
@@ -184,7 +229,6 @@ pTerm = do
     t <- pTerm
     skipExtraChars
     return (Mult f t)
-      -- Establishes an alternative symbol which is frequently used to signify multiplication
     ||| do
     skipExtraChars
     char 'x'
