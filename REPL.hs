@@ -3,8 +3,11 @@
 module REPL where
 
 import Expr
-import Parsing (parse)
-import Control.Monad (foldM)
+import Parsing(parse)
+import System.IO (hFlush, stdout)
+import Control.Monad (foldM) 
+import System.IO.Error (catchIOError, ioeGetErrorString)  
+
 
 data REPLState = REPLState { vars :: BST Name Value  
                            , history :: [Command]
@@ -17,10 +20,10 @@ initREPLState = REPLState Empty [] 0
 -- that name and value added.
 -- If it already exists, removes the old value
 updateVars :: Name -> Value -> BST Name Value -> BST Name Value
-updateVars name value vars = bstInsert name value vars
+updateVars = bstInsert 
 
 dropVar :: Name -> BST Name Value -> BST Name Value
-dropVar name vars = bstDelete name vars
+dropVar = bstDelete
 
 -- Function which adds a command to the command history in the state
 addHistory :: REPLState -> Command -> REPLState
@@ -43,27 +46,31 @@ process st (Set "it" _) = do
   putStrLn "You cannot assign a value to the implicit variable 'it'."
   return st
 
+
 process st (Set var e) = do
   case eval (vars st) e of
     Left err -> do
-      putStrLn $ "Assignment error: " ++ err
-      return st
+      putStrLn $ "Error: " ++ err
+      return st  -- Return current state without updating
     Right value -> do
       putStrLn "OK"
-      let newVars = updateVars var value (vars st)
-      let newState = addHistory st { vars = newVars } (Set var e)
-      return newState
+      let newVars = bstInsert var value (vars st)  -- Use BST
+      return $ st { vars = newVars }
 
 process st (ReadFile path) = do
-  contents <- readFile path
+  -- Read file contents and handle IO errors
+  contents <- readFile path `catchIOError` (\e -> do
+    putStrLn $ "File error: " ++ ioeGetErrorString e
+    return "")
   let lines' = lines contents
-  -- Parse each line into a Command
-  commands <- mapM parseLine lines'
-  foldM (\st' cmd -> process st' cmd) st commands
+  -- Parse and execute each line
+  foldM processLine st lines'
   where
-    parseLine line = case parse pCommand line of
-      [(cmd, "")] -> return cmd
-      _ -> error $ "Parse error in line: " ++ line
+    processLine st' line = case parse pCommand line of
+      [(cmd, "")] -> process st' cmd  -- Valid command
+      _ -> do
+        putStrLn $ "Parse error in line: " ++ line
+        return st'  -- Continue processing subsequent commands
 
 process st (Recall n) = do
   let historyLength = length (history st)
@@ -89,16 +96,17 @@ process st (Eval e) = do
 -- 'process' to process the command.
 -- 'process' will call 'repl' when done, so the system loops.
 repl :: REPLState -> IO ()
-repl st = do
-  putStr (show (length (history st)) ++ " > ")
-  inp <- getLine
-  -- Allows for the user to quit the calculator gracefully
-  case inp of
-    ":q" -> putStrLn "Bye"
-    _ -> case parse pCommand inp of
-           [(cmd, "")] -> do
-             newState <- process st cmd
-             repl newState
-           _ -> do
-             putStrLn "Parse error."
-             repl st
+repl st = do putStr (show (length (history st)) ++ " > ")
+            -- Prevents the user input from appearing twice
+            -- The following line was inspired by: https://mail.haskell.org/pipermail/beginners/2010-March/003692.htmlma
+             hFlush stdout
+             inp <- getLine
+            -- Allows for the user to quit the calculator gracefully
+             case inp of 
+              ":q" -> putStrLn "Bye"
+              _ -> case parse pCommand inp of
+                  [(cmd, "")] -> do -- Must parse entire input
+                     newState <- process st cmd
+                     repl newState 
+                  _ -> do putStrLn "There has been a parse error."
+                          repl st

@@ -112,14 +112,25 @@ eval vars (Add x y) = do
   a <- eval vars x
   b <- eval vars y
   case (a, b) of
-    (StringVal s1, StringVal s2) -> Right $ StringVal (s1 ++ s2)  
+    (StringVal s1, StringVal s2) -> Right $ StringVal (s1 ++ s2)
+    (StringVal _, _) -> Left "Cannot add string to number."
+    (_, StringVal _) -> Left "Cannot add number to string."
     _ -> do
       (a', b') <- bothNums a b
       if fromIntegral (round a') == a' && fromIntegral (round b') == b'
         then Right $ IntVal (round a' + round b')
         else Right $ DoubleVal (a' + b')
+
 eval vars (Subt x y) = operationCalc vars x y (-)
-eval vars (Mult x y) = operationCalc vars x y (*)
+
+eval vars (Mult x y) = do
+  a <- eval vars x
+  b <- eval vars y
+  case (a, b) of
+    (StringVal _, _) -> Left "Cannot multiply strings."
+    (_, StringVal _) -> Left "Cannot multiply by strings."
+    _ -> operationCalc vars x y (*)
+
 eval vars (Div x y) = do
   aVal <- eval vars x 
   bVal <- eval vars y  
@@ -139,10 +150,21 @@ eval vars (Mod x y) = do
 eval vars (Pow x y) = operationCalc vars x y (**)
 eval vars (Abs x) = absCalc vars x
 
+-- Function to skip comments that are added on the command line by consuming them until a new line is reached
+skipComments :: Parser ()
+skipComments = do
+   (char '#' >> many (sat (/= '\n')) >> return ()) ||| return ()
+   (string "--" >> many (sat (/= '\n')) >> return ()) ||| return ()
+
+-- Function that allows for extra characters (comments and spaces) to be skipped
 skipExtraChars :: Parser ()
 skipExtraChars = do
   many (sat isSpace)
   return ()
+  skipComments
+
+digitToInt :: Char -> Int
+digitToInt x = fromEnum x - fromEnum '0'
 
 -- Parser for commands (supports absolute value, recall, set, and eval)
 pCommand :: Parser Command
@@ -168,13 +190,13 @@ pCommand =
     return (Recall (read n))
   ||| do
     skipExtraChars
-    t <- many1 letter
+    t <- many1 (letter ||| digit)  -- Allow digits in variable names (e.g., x0, x1)
     skipExtraChars
     char '='
     skipExtraChars
     e <- pExpr
     skipExtraChars
-    return (Set t e)  -- Removed extra ')'
+    return (Set t e)  -- Set variable t to the result of expression e
   ||| do
     skipExtraChars
     e <- pExpr
