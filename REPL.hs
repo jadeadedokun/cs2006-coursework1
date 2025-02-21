@@ -53,7 +53,10 @@ process st (Set var e) = do
     Right value -> do
       putStrLn "OK"
       let newVars = bstInsert var value (vars st)  -- Use BST
-      return $ st { vars = newVars }
+      let newState = st { vars = newVars }
+      -- Add the Set command to the history
+      let updatedState = addHistory newState (Set var e)
+      return updatedState
 
 process st (ReadFile path) = do
   -- Read file contents and handle IO errors
@@ -76,7 +79,7 @@ process st (Recall n) = do
   if n >= 0 && n < historyLength
     then process st (history st !! n)
     else do
-      putStrLn "Invalid command number."
+      putStrLn "The command number you have entered is invalid."
       return st
 
 -- Function to evaluate an expression and print the result or an error message 
