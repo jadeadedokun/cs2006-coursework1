@@ -4,6 +4,7 @@ import Parsing
 
 type Name = String
 
+-- show instance for value type to be convert values to their string representation
 instance Show Value where
   show (IntVal x) = show x
   show (DoubleVal x) = show x
@@ -43,6 +44,8 @@ bstInsert k v (Node left k' v' right)
   | otherwise = Node left k v right  -- Replace existing value
 -- Lookup a key in the BST
 
+
+-- lookup key in the BST
 bstLookup :: Ord k => k -> BST k v -> Maybe v
 bstLookup _ Empty = Nothing
 bstLookup k (Node left k' v' right)
@@ -50,6 +53,7 @@ bstLookup k (Node left k' v' right)
   | k > k'    = bstLookup k right
   | otherwise = Just v' 
 
+--Deletes keys from the BST, remains the same if key is not found 
 bstDelete :: Ord k => k -> BST k v -> BST k v
 bstDelete _ Empty = Empty
 bstDelete k (Node left k' v' right)
