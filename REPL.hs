@@ -1,10 +1,10 @@
 module REPL where
 
 import Expr
-import Parsing(parse)
+import Parsing
 import System.IO (hFlush, stdout)
-import Control.Monad (foldM) 
-import System.IO.Error (catchIOError, ioeGetErrorString)  
+import Control.Monad (foldM)
+import System.IO.Error (catchIOError, ioeGetErrorString)
 
 
 data REPLState = REPLState { vars :: BST Name Value  
@@ -38,12 +38,12 @@ handleEvalResult (Left err) st = do
   putStrLn $ "Error: " ++ err
   return st
 
-
+-- Function which processes a set command by setting the variable and updating the state 
 process :: REPLState -> Command -> IO REPLState
+-- Ensures that 'it' cannot be overwritten and will only store the result of the most recent calculation 
 process st (Set "it" _) = do
   putStrLn "You cannot assign a value to the implicit variable 'it'."
   return st
-
 
 process st (Set var e) = do
   case eval (vars st) e of
@@ -73,6 +73,7 @@ process st (ReadFile path) = do
         putStrLn $ "Parse error in line: " ++ line
         return st'  -- Continue processing subsequent commands
 
+-- Function to return the result associated with a specified command number if it exists 
 process st (Recall n) = do
   let historyLength = length (history st)
   if n >= 0 && n < historyLength
@@ -81,6 +82,7 @@ process st (Recall n) = do
       putStrLn "Invalid command number."
       return st
 
+-- Function to evaluate an expression and print the result or an error message 
 process st (Eval e) = do
   case eval (vars st) e of
     Left err -> do
@@ -88,6 +90,7 @@ process st (Eval e) = do
       return st
     Right value -> do
       putStrLn $ show value
+    -- Updates the value of 'it' to store the result of the most recent numerical calculation 
       let newVars = updateVars "it" value (vars st)
       let newState = addHistory st { vars = newVars } (Eval e)
       return newState
@@ -99,15 +102,14 @@ process st (Eval e) = do
 repl :: REPLState -> IO ()
 repl st = do putStr (show (length (history st)) ++ " > ")
             -- Prevents the user input from appearing twice
-            -- The following line was inspired by: https://mail.haskell.org/pipermail/beginners/2010-March/003692.htmlma
              hFlush stdout
-             inp <- getLine
-            -- Allows for the user to quit the calculator gracefully
-             case inp of 
-              ":q" -> putStrLn "Bye"
-              _ -> case parse pCommand inp of
-                  [(cmd, "")] -> do -- Must parse entire input
-                     newState <- process st cmd
-                     repl newState 
-                  _ -> do putStrLn "There has been a parse error."
+             inp <- getLine 
+            -- Allows for the user to quit the calculator gracefully 
+             case inp of  
+              ":q" -> putStrLn "The calculator has ended." 
+              _ -> case parse pCommand inp of 
+                  [(cmd, "")] -> do -- Must parse entire input 
+                          newState <- process st cmd
+                          repl newState
+                  _ -> do putStrLn "There has been a parse error." 
                           repl st

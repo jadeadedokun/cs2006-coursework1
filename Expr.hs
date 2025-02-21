@@ -1,8 +1,6 @@
 module Expr where
 
-
-import Parsing (Parser, char, digit, letter, many, many1, sat, string, intTok, doubleTok, stringLit, (|||))
-import Data.Char (isSpace, isDigit)
+import Parsing
 
 type Name = String
 
@@ -26,13 +24,9 @@ data Expr
 
 data Value = IntVal Int | DoubleVal Double | StringVal String deriving (Eq)
 
-
 data BST k v = Empty | Node (BST k v) k v (BST k v) deriving (Show)
 
-
-
--- These are the REPL commands - set a variable name to a value, and evaluate
--- an expression
+-- These are the REPL commands - set a variable name to a value, evaluate an expression, repeat the result of an earlier expressionj
 data Command
   = Set Name Expr
   | Eval Expr
@@ -47,8 +41,8 @@ bstInsert k v (Node left k' v' right)
   | k < k'    = Node (bstInsert k v left) k' v' right
   | k > k'    = Node left k' v' (bstInsert k v right)
   | otherwise = Node left k v right  -- Replace existing value
-
 -- Lookup a key in the BST
+
 bstLookup :: Ord k => k -> BST k v -> Maybe v
 bstLookup _ Empty = Nothing
 bstLookup k (Node left k' v' right)
@@ -71,13 +65,11 @@ bstDelete k (Node left k' v' right)
     bstMin (Node Empty k v _) = (k, v)
     bstMin (Node left _ _ _)  = bstMin left
 
-
-
 -- Helper to extract numerical value (Int or Double)
 getNum :: Value -> Either String Double
 getNum (IntVal x) = Right (fromIntegral x)
 getNum (DoubleVal x) = Right x
-getNum _ = Left "Expected a number."
+getNum _ = Left "Please input a number."
 
 -- Helper to check if two values are compatible for arithmetic
 bothNums :: Value -> Value -> Either String (Double, Double)
@@ -94,7 +86,7 @@ operationCalc vars x y operator = do
   (a', b') <- bothNums a b
   return $ DoubleVal (operator a' b')
 
--- Function to calculate the absolute value of a number
+-- Function to calcuate the absolute value of a number (if negative, otherwise returns the same number) 
 absCalc :: BST Name Value -> Expr -> Either String Value
 absCalc vars x = do
   a <- eval vars x
@@ -103,11 +95,16 @@ absCalc vars x = do
     DoubleVal d -> Right $ DoubleVal (abs d)
     _           -> Left "Cannot take absolute value of a string."
 
+-- Returns a value directly if it is given
 eval :: BST Name Value -> Expr -> Either String Value
 eval _ (Val x) = Right x
+
+-- Searches for a name and returns it if found or a suitable error message
 eval vars (Var name) = case bstLookup name vars of
   Just v  -> Right v
   Nothing -> Left $ "Variable '" ++ name ++ "' not found."
+
+-- Handles addition and outputs a correct value or error message if necessary
 eval vars (Add x y) = do
   a <- eval vars x
   b <- eval vars y
@@ -121,8 +118,10 @@ eval vars (Add x y) = do
         then Right $ IntVal (round a' + round b')
         else Right $ DoubleVal (a' + b')
 
+-- Handles subtraction and outputs a correct value or error message if necessary
 eval vars (Subt x y) = operationCalc vars x y (-)
 
+-- Handles multiplication (with strings and ) and outputs a correct value or error message if necessary
 eval vars (Mult x y) = do
   a <- eval vars x
   b <- eval vars y
@@ -131,6 +130,7 @@ eval vars (Mult x y) = do
     (_, StringVal _) -> Left "Cannot multiply by strings."
     _ -> operationCalc vars x y (*)
 
+-- Handles the special case of division by 0 as well as all other division operations 
 eval vars (Div x y) = do
   aVal <- eval vars x 
   bVal <- eval vars y  
@@ -138,6 +138,7 @@ eval vars (Div x y) = do
   if b == 0 
     then Left "Division by zero." 
     else Right $ DoubleVal (a / b)
+
 eval vars (Mod x y) = do
   a <- eval vars x
   b <- eval vars y
@@ -147,7 +148,9 @@ eval vars (Mod x y) = do
         then Left "Modulus by zero." 
         else Right $ IntVal (a' `mod` b')
     _ -> Left "Modulus requires integer operands."
+
 eval vars (Pow x y) = operationCalc vars x y (**)
+
 eval vars (Abs x) = absCalc vars x
 
 -- Function to skip comments that are added on the command line by consuming them until a new line is reached
@@ -159,8 +162,7 @@ skipComments = do
 -- Function that allows for extra characters (comments and spaces) to be skipped
 skipExtraChars :: Parser ()
 skipExtraChars = do
-  many (sat isSpace)
-  return ()
+  space
   skipComments
 
 digitToInt :: Char -> Int
@@ -169,8 +171,9 @@ digitToInt x = fromEnum x - fromEnum '0'
 -- Parser for commands (supports absolute value, recall, set, and eval)
 pCommand :: Parser Command
 pCommand =
+    -- Allows for parsing the absolute value of the result of an expression 
   (do skipExtraChars
-      string ":read"
+      string "Read"
       skipExtraChars
       path <- many1 (sat (/= ' '))
       return (ReadFile path))
@@ -182,15 +185,16 @@ pCommand =
           char '|'
           skipExtraChars
           return (Eval (Abs e)))
+    -- Allows for numbers greater than one digit to be entered into the calculator for use 
   ||| do
     skipExtraChars
     char '!'
     -- Allows for numbers greater than one digit to be entered into the calculator for use
-    n <- many1 digit
-    return (Recall (read n))
+    n <- integer
+    return (Recall (n))
   ||| do
     skipExtraChars
-    t <- many1 (letter ||| digit)  -- Allow digits in variable names (e.g., x0, x1)
+    t <- ident -- Allow digits in variable names (e.g., x0, x1)
     skipExtraChars
     char '='
     skipExtraChars
@@ -243,64 +247,66 @@ pFactor =
     d <- doubleTok  -- Parse floating-point numbers first
     skipExtraChars
     return (Val (DoubleVal d))
-  ||| do
-    skipExtraChars
-    n <- intTok  -- Parse integers after floats
-    skipExtraChars
-    return (Val (IntVal n))
-  ||| do
-    skipExtraChars
-    v <- many1 letter
-    skipExtraChars
-    return (Var v)
-  ||| do
-    skipExtraChars
-    char '('
-    e <- pExpr
-    char ')'
-    skipExtraChars
-    return e
-
+    ||| do    
+    skipExtraChars 
+    n <- intTok
+    return (Val (IntVal(n)))
+    ||| do 
+      skipExtraChars 
+      -- Allows for calculations to be performed with variables of names containing any alphanumeric characters 
+      v <- ident 
+      skipExtraChars 
+      return (Var v) 
+    ||| do 
+      skipExtraChars 
+      char '(' 
+      e <- pExpr 
+      char ')' 
+      skipExtraChars 
+      return e 
 
 -- Parser for terms (multiplication, division, etc.)
-pTerm :: Parser Expr
-pTerm = do
-  skipExtraChars
-  f <- pFactor
-  do
-    skipExtraChars
-    char '^'
-    t <- pTerm
-    skipExtraChars
-    return (Pow f t)
-    ||| do
-    skipExtraChars
-    string "mod"
-    t <- pTerm
-    skipExtraChars
-    return (Mod f t)
-    ||| do
-    skipExtraChars
-    char '%'
-    t <- pTerm
-    skipExtraChars
-    return (Mod f t)    
-    ||| do
-    skipExtraChars
-    char '*'
-    t <- pTerm
-    skipExtraChars
-    return (Mult f t)
-    ||| do
-    skipExtraChars
-    char 'x'
-    t <- pTerm
-    skipExtraChars
-    return (Mult f t)    
-    ||| do
-    skipExtraChars
-    char '/'
-    t <- pTerm
-    skipExtraChars
-    return (Div f t)
-    ||| return f
+pTerm :: Parser Expr 
+pTerm = do 
+  skipExtraChars 
+  f <- pFactor 
+  do 
+    skipExtraChars 
+    char '^' 
+    t <- pTerm 
+    skipExtraChars 
+    return (Pow f t) 
+      -- Allows for the modulus calculation to be performed 
+    ||| do 
+    skipExtraChars 
+    symbol "mod" 
+    t <- pTerm 
+    skipExtraChars 
+    return (Mod f t) 
+      -- Establishes an alternative symbol which is frequently used to signify modulus 
+    ||| do 
+    skipExtraChars 
+    char '%' 
+    t <- pTerm 
+    skipExtraChars 
+    return (Mod f t)     
+    ||| do 
+    skipExtraChars 
+    char '*' 
+    t <- pTerm 
+    skipExtraChars 
+    return (Mult f t) 
+      -- Establishes an alternative symbol which is frequently used to signify multiplication 
+    ||| do 
+    skipExtraChars 
+    char 'x' 
+    t <- pTerm 
+    skipExtraChars 
+    return (Mult f t)     
+    ||| do 
+    skipExtraChars 
+    char '/' 
+    t <- pTerm 
+    skipExtraChars 
+    return (Div f t) 
+    ||| return f 

@@ -1,4 +1,7 @@
+<<<<<<< HEAD
+Read commands2.txt
+=======
 x = 5
 y = 10
 x + y
-:q
+>>>>>>> 0db313cec235196ee0517cee1b4a937cab4409df

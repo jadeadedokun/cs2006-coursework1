@@ -3,7 +3,7 @@ STUDENT ID: 230013682
 CS2006 PRACTICAL 1 README
 ---------------------------
 
-The line below should be run from inside the H1 folder in order to run the calculator:
+The line below should be run from inside the CS2006-Coursework1 folder in order to build the program and run the calculator:
 
 make
 
