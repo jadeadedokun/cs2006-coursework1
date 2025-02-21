@@ -99,12 +99,11 @@ process st (Eval e) = do
 repl :: REPLState -> IO ()
 repl st = do putStr (show (length (history st)) ++ " > ")
             -- Prevents the user input from appearing twice
-            -- The following line was inspired by: https://mail.haskell.org/pipermail/beginners/2010-March/003692.htmlma
              hFlush stdout
              inp <- getLine 
             -- Allows for the user to quit the calculator gracefully 
              case inp of  
-              ":q" -> putStrLn "Bye" 
+              ":q" -> putStrLn "The calculator has ended." 
               _ -> case parse pCommand inp of 
                   [(cmd, "")] -> do -- Must parse entire input 
                           newState <- process st cmd
