@@ -118,7 +118,7 @@ many1 p                       =  do v  <- p
                                     return (v:vs)
 
 ident                         :: Parser String
-ident                         =  do x  <- lower
+ident                         =  do x  <- upper <|> lower
                                     xs <- many alphanum
                                     return (x:xs)
 
