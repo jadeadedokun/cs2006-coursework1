@@ -109,4 +109,4 @@ repl st = do putStr (show (length (history st)) ++ " > ")
                           newState <- process st cmd
                           repl newState
                   _ -> do putStrLn "There has been a parse error." 
-                          repl st 
+                          repl st
