@@ -79,7 +79,7 @@ process st (Recall n) = do
   if n >= 0 && n < historyLength
     then process st (history st !! n)
     else do
-      putStrLn "Invalid command number."
+      putStrLn "The command number you have entered is invalid."
       return st
 
 -- Function to evaluate an expression and print the result or an error message 
