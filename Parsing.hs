@@ -5,10 +5,7 @@ Graham Hutton, Cambridge University Press, 2007.
 Minor changes by Edwin Brady
 -}
 
-module Parsing (
-  Parser, char, digit, letter, many1, sat, string, 
-  intTok, doubleTok,   stringLit, (|||), many, parse
-) where
+module Parsing where
 
 import Data.Char
 import Control.Monad
